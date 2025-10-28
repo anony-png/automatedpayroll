@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>MotorPH — Admin</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{--red:#c62828;--muted:#666;font-family:Inter,system-ui}
+  body{margin:0;background:#f8f8f9;display:flex;align-items:center;justify-content:center}
+  .wrap{width:980px;max-width:96vw;display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:20px}
+  .panel{background:white;padding:12px;border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.06)}
+  h3{margin:0 0 8px}
+  button{padding:8px;border-radius:8px;border:0;background:var(--red);color:white}
+  table{width:100%;border-collapse:collapse}
+  td,th{padding:6px;border-bottom:1px solid #f2f2f2}
+  .muted{color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panel">
+      <h3>Admin — Requests</h3>
+      <div id="req-table"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Announcements</h3>
+      <input id="ann-title" placeholder="Title" style="width:100%;padding:8px;border-radius:8px;border:1px solid #eee;margin-bottom:6px"/>
+      <textarea id="ann-body" placeholder="Message" style="width:100%;padding:8px;border-radius:8px;border:1px solid #eee"></textarea>
+      <div style="margin-top:8px"><button id="ann-add">Add Announcement</button></div>
+      <div style="margin-top:12px" id="ann-list"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Employees & Payroll</h3>
+      <div id="emp-table"></div>
+    </div>
+
+    <div class="panel">
+      <h3>Admin Actions</h3>
+      <div class="muted">You are logged in as <strong>admin</strong>. Use this panel to approve/decline leaves, assign overtime/absent, and view computed payroll.</div>
+      <div style="margin-top:12px"><button id="logout">Logout</button></div>
+    </div>
+  </div>
+
+<script>
+function getUsers(){ return JSON.parse(localStorage.getItem('mp_users')||'[]'); }
+function getRequests(){ return JSON.parse(localStorage.getItem('mp_requests')||'[]'); }
+function saveRequests(r){ localStorage.setItem('mp_requests', JSON.stringify(r)); }
+function getAttendance(){ return JSON.parse(localStorage.getItem('mp_attendance')||'[]'); }
+function saveAnnouncements(a){ localStorage.setItem('mp_announcements', JSON.stringify(a)); }
+function getAnnouncements(){ return JSON.parse(localStorage.getItem('mp_announcements')||'[]'); }
+function getPayslips(){ return JSON.parse(localStorage.getItem('mp_payslips')||'[]'); }
+
+const users = getUsers();
+
+function renderRequests(){
+  const reqs = getRequests().reverse();
+  const el = document.getElementById('req-table');
+  if(!reqs.length){ el.innerHTML = '<div class="muted">No requests</div>'; return; }
+  let html = '<table><thead><tr><th>User</th><th>Type</th><th>Date</th><th>Reason</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+  reqs.forEach(r => {
+    const user = users.find(u => u.employeeId === r.userId) || {name:r.userId};
+    html += `<tr>
+      <td>${user.name}</td>
+      <td>${r.type}</td>
+      <td>${r.date||r.created}</td>
+      <td>${r.reason||r.details||''}</td>
+      <td id="st-${r.id}">${r.status}</td>
+      <td>
+        ${r.status === 'Pending' ? `<button onclick="approve('${r.id}')">Approve</button> <button onclick="decline('${r.id}')">Decline</button>` : ''}
+      </td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function approve(id){
+  const reqs = getRequests();
+  const r = reqs.find(x => x.id === id);
+  if(!r) return;
+  r.status = 'Approved';
+  saveRequests(reqs);
+  // if leave approve - add to attendance as a leave record (so schedule shows it)
+  if(r.type === 'leave'){
+    const att = getAttendance();
+    att.push({id: 'leave-'+Date.now(), userId: r.userId, date: r.date, clockIn:null, clockOut:null, overtimeHours:0, note:'Approved leave'});
+    localStorage.setItem('mp_attendance', JSON.stringify(att));
+  }
+  renderRequests(); renderEmployees();
+}
+
+function decline(id){
+  const reqs = getRequests();
+  const r = reqs.find(x => x.id === id);
+  if(!r) return;
+  r.status = 'Declined';
+  saveRequests(reqs);
+  renderRequests();
+}
+
+document.getElementById('ann-add').addEventListener('click', () => {
+  const title = document.getElementById('ann-title').value.trim();
+  const body = document.getElementById('ann-body').value.trim();
+  if(!title || !body) return alert('Add title and message.');
+  const ann = getAnnouncements();
+  ann.push({id:Date.now().toString(), title, body, created:new Date().toISOString()});
+  saveAnnouncements(ann);
+  document.getElementById('ann-title').value=''; document.getElementById('ann-body').value='';
+  renderAnnouncements();
+});
+
+function renderAnnouncements(){
+  const ann = getAnnouncements().reverse();
+  const el = document.getElementById('ann-list');
+  if(!ann.length) return el.innerHTML = '<div class="muted">No announcements</div>';
+  el.innerHTML = ann.map(a => `<div style="padding:8px;border-radius:8px;border:1px solid #faf0f0;margin-bottom:6px"><strong>${a.title}</strong><div class="muted">${a.body}</div><div style="font-size:12px;color:#999;margin-top:6px">${new Date(a.created).toLocaleString()}</div></div>`).join('');
+}
+
+function renderEmployees(){
+  const el = document.getElementById('emp-table');
+  const u = getUsers();
+  if(!u.length) return el.innerHTML = '<div class="muted">No employees registered</div>';
+  let html = '<table><thead><tr><th>Name</th><th>EID</th><th>Salary</th><th>Payslip</th></tr></thead><tbody>';
+  u.forEach(emp => {
+    const pay = computePayslipFor(emp, new Date().toISOString().slice(0,7)); // current month preview
+    html += `<tr>
+      <td>${emp.name}</td>
+      <td>${emp.employeeId}</td>
+      <td>₱${emp.salary||0}</td>
+      <td><button onclick="viewPayslip('${emp.employeeId}')">View</button></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+function computePayslipFor(user, month){
+  const attendance = getAttendance().filter(a => a.userId === user.employeeId && a.date.startsWith(month));
+  const requests = getRequests().filter(r => r.userId === user.employeeId && r.type === 'leave' && r.status === 'Approved' && r.date.startsWith(month));
+  const totalWorkingDays = 22;
+  const presentDays = attendance.filter(a=>a.clockIn && a.clockOut).length;
+  const approvedLeaves = requests.length;
+  const absentDays = Math.max(0, totalWorkingDays - presentDays - approvedLeaves);
+  const overtimeHours = attendance.reduce((s,a)=>s + (a.overtimeHours||0),0);
+  const salary = Number(user.salary) || 0;
+  const unpaidLeaveDeduction = Math.round((salary/totalWorkingDays) * absentDays);
+  const hourly = salary/160;
+  const overtimePay = Math.round(overtimeHours * hourly * 1.25);
+  const tax = Math.round(salary * 0.10);
+  const net = Math.round(salary - tax - unpaidLeaveDeduction + overtimePay);
+  return {salary,tax,unpaidLeaveDeduction,overtimePay,net,absentDays, overtimeHours,presentDays};
+}
+
+function viewPayslip(eid){
+  const user = getUsers().find(u => u.employeeId === eid);
+  const p = computePayslipFor(user, new Date().toISOString().slice(0,7));
+  alert(`Payslip for ${user.name}:\\nBasic: ₱${p.salary}\\nTax: ₱${p.tax}\\nUnpaid Leave: ₱${p.unpaidLeaveDeduction}\\nOvertime: ₱${p.overtimePay}\\nNet: ₱${p.net}`);
+}
+
+document.getElementById('logout').addEventListener('click', () => {
+  localStorage.removeItem('mp_session');
+  location.href = 'index.html';
+});
+
+renderRequests(); renderAnnouncements(); renderEmployees();
+</script>
+</body>
+</html>

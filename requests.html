@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>MotorPH — Requests</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{--red:#c62828;--muted:#777;font-family:Inter,system-ui}
+  body{margin:0;background:#f5f5f6;display:flex;align-items:center;justify-content:center}
+  .phone{width:380px;max-width:96vw;border-radius:28px;background:white;box-shadow:0 18px 40px rgba(0,0,0,.08);overflow:hidden}
+  header{background:linear-gradient(90deg,var(--red),#a21818);color:white;padding:14px}
+  .content{padding:14px}
+  input,select,textarea{width:100%;padding:10px;border-radius:8px;border:1px solid #eee;margin-bottom:8px}
+  button{padding:10px;border-radius:8px;border:0;background:var(--red);color:white}
+  .muted{color:var(--muted);font-size:13px}
+  .req-list{margin-top:10px}
+  .req-item{padding:8px;border-radius:8px;border:1px solid #faf0f0;margin-bottom:8px;display:flex;justify-content:space-between}
+</style>
+</head>
+<body>
+  <div class="phone">
+    <header><div style="font-weight:700">Requests</div></header>
+    <div class="content">
+      <div class="muted">Request Certificate of Employment, generate Payslip, or apply for leave.</div>
+
+      <div style="margin-top:12px">
+        <div style="font-weight:700;margin-bottom:6px">Certificate of Employment</div>
+        <button id="coe-btn">Generate COE (PDF)</button>
+      </div>
+
+      <div style="margin-top:14px">
+        <div style="font-weight:700;margin-bottom:6px">Payslip</div>
+        <div style="display:flex;gap:8px">
+          <select id="payslip-month" style="flex:1;padding:8px;border-radius:8px;border:1px solid #eee"></select>
+          <button id="payslip-gen">Generate</button>
+        </div>
+      </div>
+
+      <div style="margin-top:14px">
+        <div style="font-weight:700;margin-bottom:6px">Leave Application</div>
+        <select id="leave-type"><option value="personal">Personal</option><option value="sick">Sick</option></select>
+        <input id="leave-date" placeholder="Date (YYYY-MM-DD)" />
+        <textarea id="leave-reason" placeholder="Reason"></textarea>
+        <button id="leave-submit">Submit Leave</button>
+        <div class="req-list" id="req-list"></div>
+      </div>
+
+      <div style="margin-top:12px"><a href="dashboard.html">Back to Dashboard</a></div>
+    </div>
+  </div>
+
+<script>
+const { jsPDF } = window.jspdf;
+function getSession(){ return JSON.parse(localStorage.getItem('mp_session')||'null'); }
+function getUsers(){ return JSON.parse(localStorage.getItem('mp_users')||'[]'); }
+function getRequests(){ return JSON.parse(localStorage.getItem('mp_requests')||'[]'); }
+function saveRequests(r){ localStorage.setItem('mp_requests', JSON.stringify(r)); }
+function getAttendance(){ return JSON.parse(localStorage.getItem('mp_attendance')||'[]'); }
+
+const session = getSession();
+if(!session){ alert('Login required'); location.href='index.html'; }
+if(session.role === 'admin'){ location.href='admin.html'; }
+
+const users = getUsers();
+const me = users.find(u => u.employeeId === session.id);
+
+// populate months
+const now = new Date();
+const sel = document.getElementById('payslip-month');
+for(let i=0;i<6;i++){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); sel.innerHTML += `<option value="${d.toISOString().slice(0,7)}">${d.toLocaleString(undefined,{month:'long',year:'numeric'})}</option>`; }
+
+document.getElementById('coe-btn').addEventListener('click', () => {
+  const doc = new jsPDF();
+  doc.setFontSize(16);
+  doc.text('MotorPH', 14, 20);
+  doc.setFontSize(12);
+  doc.text('Certificate of Employment', 14, 32);
+  doc.text(`This is to certify that ${me.name} (Employee ID: ${me.employeeId}) is/was employed by MotorPH.`, 14, 44);
+  doc.text(`Position: ${me.position || 'Employee'}`, 14, 54);
+  doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 64);
+  doc.save(`COE_${me.employeeId}.pdf`);
+});
+
+// Generate payslip PDF — reuse payroll calculation logic similar to payroll.html
+document.getElementById('payslip-gen').addEventListener('click', () => {
+  const month = document.getElementById('payslip-month').value;
+  // compute same as payroll page
+  const attendance = getAttendance().filter(a=>a.userId===me.employeeId && a.date.startsWith(month));
+  const presentDays = attendance.filter(a=>a.clockIn && a.clockOut).length;
+  const totalWorkingDays = 22;
+  const absentDays = Math.max(0, totalWorkingDays - presentDays);
+  const overtimeHours = attendance.reduce((s,a)=>s + (a.overtimeHours||0),0);
+  const basic = Number(me.salary||0);
+  const unpaid = Math.round((basic/totalWorkingDays)*absentDays);
+  const hourly = basic/160;
+  const overtimePay = Math.round(overtimeHours * hourly * 1.25);
+  const tax = Math.round(basic * 0.10);
+  const net = Math.round(basic - tax - unpaid + overtimePay);
+
+  const doc = new jsPDF();
+  doc.setFontSize(16); doc.text('MotorPH — Payslip',14,20);
+  doc.setFontSize(12);
+  doc.text(`Employee: ${me.name}`,14,30);
+  doc.text(`Employee ID: ${me.employeeId}`,14,36);
+  doc.text(`Period: ${new Date(month+'-01').toLocaleString(undefined,{month:'long',year:'numeric'})}`,14,42);
+  doc.text(`Basic: ₱${basic}`,14,52);
+  doc.text(`Tax: ₱${tax}`,14,58);
+  doc.text(`Unpaid leave deduction: ₱${unpaid}`,14,64);
+  doc.text(`Overtime: ₱${overtimePay}`,14,70);
+  doc.text(`Net: ₱${net}`,14,82);
+  doc.save(`payslip_${me.employeeId}_${month}.pdf`);
+});
+
+// Leave submit
+function renderRequests(){
+  const list = document.getElementById('req-list');
+  const reqs = getRequests().filter(r=>r.userId===me.employeeId).reverse();
+  list.innerHTML = '';
+  if(!reqs.length) list.innerHTML = '<div class="muted">No requests yet.</div>';
+  reqs.forEach(r => {
+    const el = document.createElement('div'); el.className='req-item';
+    el.innerHTML = `<div><div style="font-weight:700">${r.type.toUpperCase()} • ${r.date || ''}</div><div class="muted">${r.reason||r.details||''}</div></div><div class="muted">${r.status}</div>`;
+    list.appendChild(el);
+  });
+}
+
+document.getElementById('leave-submit').addEventListener('click', () => {
+  const type = document.getElementById('leave-type').value;
+  const date = document.getElementById('leave-date').value.trim();
+  const reason = document.getElementById('leave-reason').value.trim();
+  if(!date || !reason) return alert('Please add date and reason.');
+  const reqs = getRequests();
+  reqs.push({ id: Date.now().toString(), userId: me.employeeId, type:'leave', date, reason, status:'Pending', created: new Date().toISOString() });
+  saveRequests(reqs);
+  alert('Leave submitted (Pending). Admin will review.');
+  renderRequests();
+});
+
+renderRequests();
+</script>
+</body>
+</html>

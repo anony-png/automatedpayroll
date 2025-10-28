@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>MotorPH Portal — Login</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--red:#c62828;--white:#fff;--muted:#7a7a7a;font-family:Inter,system-ui,Arial;}
+  *{box-sizing:border-box} body{margin:0;background:#f8f8f9;display:flex;align-items:center;justify-content:center;height:100vh}
+  .phone{width:380px;max-width:96vw;border-radius:28px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,0.12);background:var(--white)}
+  header{background:linear-gradient(90deg,var(--red),#a21818);color:white;padding:18px}
+  .container{padding:18px}
+  h1{margin:0;font-size:18px}
+  p.muted{color:var(--muted);font-size:13px;margin:8px 0 16px}
+  input{width:100%;padding:12px;border-radius:10px;border:1px solid #eee;margin-bottom:10px;font-size:14px}
+  button{width:100%;padding:12px;border-radius:10px;border:0;background:var(--red);color:white;font-weight:600}
+  .link-row{display:flex;gap:8px;margin-top:12px}
+  .link-row a{flex:1;padding:10px;border-radius:10px;text-align:center;text-decoration:none;border:1px solid #eee;color:var(--red);font-weight:600}
+  .small{font-size:13px;color:var(--muted);margin-top:10px;text-align:center}
+</style>
+</head>
+<body>
+  <div class="phone" role="application">
+    <header>
+      <h1>MotorPH Employee Portal</h1>
+      <p style="margin:6px 0 0;font-size:13px">Login to your employee account</p>
+    </header>
+
+    <div class="container">
+      <div>
+        <input id="login-user" placeholder="Employee ID or username (admin)" />
+        <input id="login-pass" type="password" placeholder="Password (for admin only)" />
+        <button id="login-btn">Sign in</button>
+
+        <div class="link-row">
+          <a href="register.html">Register</a>
+          <a href="forgot.html">Forgot</a>
+        </div>
+
+        <div class="small">Register to create your account.</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* Simple auth:
+ - Admin: username "admin" password "123456"
+ - Employees: their employeeId stored in localStorage users array
+*/
+function getUsers(){ return JSON.parse(localStorage.getItem('mp_users')||'[]'); }
+
+document.getElementById('login-btn').addEventListener('click', () => {
+  const user = document.getElementById('login-user').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  if (!user) return alert('Enter username or employee ID.');
+  if (user.toLowerCase() === 'admin') {
+    if (pass === '123456') {
+      localStorage.setItem('mp_session', JSON.stringify({role:'admin',name:'Administrator'}));
+      location.href = 'admin.html';
+    } else {
+      alert('Incorrect admin password.');
+    }
+    return;
+  }
+  const users = getUsers();
+  const found = users.find(u => u.employeeId === user || u.username === user || u.name.toLowerCase() === user.toLowerCase());
+  if (!found) return alert('User not found. Please register.');
+  // create session
+  localStorage.setItem('mp_session', JSON.stringify({role:'employee', id: found.employeeId, name: found.name}));
+  location.href = 'dashboard.html';
+});
+</script>
+</body>
+</html>

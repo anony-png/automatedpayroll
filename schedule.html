@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>MotorPH — Schedule</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root{--red:#c62828;--muted:#777;font-family:Inter,system-ui}
+  body{margin:0;background:#f5f5f6;display:flex;align-items:center;justify-content:center;height:100vh}
+  .phone{width:380px;max-width:96vw;border-radius:28px;background:white;box-shadow:0 18px 40px rgba(0,0,0,.08);overflow:hidden}
+  header{background:linear-gradient(90deg,var(--red),#a21818);color:white;padding:14px}
+  .content{padding:14px}
+  .day{padding:10px;border-radius:10px;border:1px solid #faf0f0;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+  .muted{color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+  <div class="phone">
+    <header><div style="font-weight:700">Schedule</div></header>
+    <div class="content">
+      <div class="muted">Standard schedule: Monday–Friday 09:00 – 18:00. Weekends: Rest day.</div>
+      <div id="week" style="margin-top:12px"></div>
+      <div style="margin-top:10px">
+        <a href="dashboard.html">Back to Dashboard</a>
+      </div>
+    </div>
+  </div>
+
+<script>
+function getSession(){ return JSON.parse(localStorage.getItem('mp_session')||'null'); }
+function getUsers(){ return JSON.parse(localStorage.getItem('mp_users')||'[]'); }
+function getAttendance(){ return JSON.parse(localStorage.getItem('mp_attendance')||'[]'); }
+function getRequests(){ return JSON.parse(localStorage.getItem('mp_requests')||'[]'); }
+
+const session = getSession();
+if(!session){ alert('Login required'); location.href='index.html'; }
+if(session.role === 'admin'){ location.href='admin.html'; }
+
+const users = getUsers();
+const me = users.find(u => u.employeeId === session.id);
+const attendance = getAttendance().filter(a => a.userId === session.id);
+const requests = getRequests().filter(r => r.userId === session.id);
+
+// Build a Monday - Friday schedule for current week (simple)
+const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const weekEl = document.getElementById('week');
+
+days.forEach(d => {
+  const el = document.createElement('div'); el.className='day';
+  let label = d;
+  // rest days weekend
+  if(d === 'Sat' || d === 'Sun') {
+    el.innerHTML = `<div>${label}</div><div class="muted">Rest day</div>`;
+  } else {
+    el.innerHTML = `<div>${label} • 09:00 - 18:00</div><div class="muted" id="status-${d}">Scheduled</div>`;
+  }
+  weekEl.appendChild(el);
+});
+
+// mark attendances (match by weekday)
+attendance.forEach(a => {
+  const dt = new Date(a.date);
+  const weekday = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()];
+  if(document.getElementById('status-'+weekday)) {
+    let txt = '';
+    if(a.clockIn) txt += 'In: ' + new Date(a.clockIn).toLocaleTimeString();
+    if(a.clockOut) txt += ' Out: ' + new Date(a.clockOut).toLocaleTimeString();
+    if(a.overtimeHours && a.overtimeHours>0) txt += ' • Overtime: ' + a.overtimeHours + 'h';
+    document.getElementById('status-'+weekday).innerText = txt || 'Present';
+  }
+});
+
+// mark leave requests
+requests.forEach(r => {
+  if(r.type === 'leave'){
+    const dt = new Date(r.date);
+    const weekday = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()];
+    if(document.getElementById('status-'+weekday)) {
+      document.getElementById('status-'+weekday).innerText = r.status + ' (Leave)';
+    }
+  }
+});
+</script>
+</body>
+</html>

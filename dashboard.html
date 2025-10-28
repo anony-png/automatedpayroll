@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>MotorPH — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root{--red:#c62828;--white:#fff;--muted:#7a7a7a;font-family:Inter,system-ui,Arial;}
+ body{margin:0;background:#f5f5f6;display:flex;align-items:center;justify-content:center}
+.phone{width:380px;max-width:96vw;border-radius:28px;overflow:hidden;background:var(--white);box-shadow:0 18px 50px rgba(0,0,0,.12);height:92vh;display:flex;flex-direction:column}
+ header{background:linear-gradient(90deg,var(--red),#a21818);color:white;padding:12px}
+ .content{padding:14px;overflow:auto;flex:1}
+ .row{display:flex;gap:10px;align-items:center}
+  .big-btn{width:80%;padding:12px;border-radius:12px;background:var(--red);color:white;border:0;font-weight:700;margin-bottom:10px}
+  .card{background:#fff;padding:12px;border-radius:12px;margin-bottom:12px;border:1px solid #fafafa}
+  .muted{color:var(--muted);font-size:12px}
+  nav{display:flex;padding:10px;gap:6px;border-top:1px solid #f1f1f1}
+  nav a{flex:1;text-align:center;padding:8px;border-radius:10px;text-decoration:navajowhite;color:var(--red);font-weight:700}
+  .announce{background:rgb(221, 218, 218);border-left:4px solid var(--red);padding:8px;border-radius:8px}
+</style>
+</head>
+<body>
+  <div class="phone">
+    <header>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div id="greeting" style="font-weight:700">Hello</div>
+          <div style="font-size:12px" id="subg">MotorPH — Employee</div>
+        </div>
+        <div style="font-size:12px;text-align:right" id="clock">--:--:--</div>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div class="muted">Today</div>
+            <div id="today-date" style="font-weight:700"></div>
+          </div>
+          <div>
+            <button id="clock-in" class="big-btn">Clock In</button>
+            <button id="clock-out" class="big-btn" style="margin-top:8px;background:#fff;border:2px solid var(--red);color:var(--red)">Clock Out</button>
+          </div>
+        </div>
+        <div style="margin-top:8px" class="muted">Clock in/out times update schedules & payroll.</div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div style="font-weight:700">Announcements</div>
+          <div class="muted">MotorPH</div>
+        </div>
+        <div id="announcements" style="margin-top:8px">
+          <div class="announce">No announcements yet. Admin can add announcements in Admin panel. </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-weight:700">Quick Links</div>
+            <div class="muted">Navigate employee portals.</div>
+          </div>
+        </div>
+        <div style="margin-top:10px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+          <a class="big-btn" style="background:#b8b6b6;color:var(--red);border:2px solid #f2f2f2;font-weight:800" href="profile.html">Profile</a>
+          <a class="big-btn" style="background:#b8b6b6;color:var(--red);border:2px solid #f2f2f2;font-weight:800" href="schedule.html">Schedule</a>
+          <a class="big-btn" style="background:#b8b6b6;color:var(--red);border:2px solid #f2f2f2;font-weight:800" href="payroll.html">Payroll</a>
+          <a class="big-btn" style="background:#b8b6b6;color:var(--red);border:2px solid #f2f2f2;font-weight:800" href="requests.html">Requests</a>
+        </div>
+      </div>
+   </nav>
+   <a id="logout" href="#">Logout</a>
+     </nav>
+   </div>
+<script>
+function formatTime(d){ return d.toLocaleTimeString(); }
+function todayDate(){ const d=new Date(); return d.toLocaleDateString(); }
+function getSession(){ return JSON.parse(localStorage.getItem('mp_session')||'null'); }
+function getUsers(){ return JSON.parse(localStorage.getItem('mp_users')||'[]'); }
+function getAttendance(){ return JSON.parse(localStorage.getItem('mp_attendance')||'[]'); }
+
+// update clock
+setInterval(()=>{ document.getElementById('clock').innerText = new Date().toLocaleTimeString(); }, 500);
+
+// init
+const session = getSession();
+if(!session){ alert('Please login.'); location.href='index.html'; }
+document.getElementById('greeting').innerText = session.name || 'Employee';
+document.getElementById('subg').innerText = session.role === 'admin' ? 'Administrator' : 'MotorPH Employee';
+document.getElementById('today-date').innerText = new Date().toLocaleString();
+
+document.getElementById('logout').addEventListener('click', (e)=>{ e.preventDefault(); localStorage.removeItem('mp_session'); location.href='index.html'; });
+
+document.getElementById('clock-in').addEventListener('click', () => {
+  const att = getAttendance();
+  const userId = session.id;
+  const now = new Date();
+  const iso = now.toISOString();
+  const dayKey = iso.slice(0,10);
+  // find today's record
+  let rec = att.find(a => a.userId === userId && a.date === dayKey);
+  if(rec && rec.clockIn) return alert('You already clocked in today at ' + new Date(rec.clockIn).toLocaleTimeString());
+  if(!rec){
+    rec = { id: Date.now().toString(), userId, date: dayKey, clockIn: iso, clockOut: null, overtimeHours:0, note:'' };
+    att.push(rec);
+  } else {
+    rec.clockIn = iso;
+  }
+  localStorage.setItem('mp_attendance', JSON.stringify(att));
+  alert('Clocked in at ' + now.toLocaleTimeString());
+});
+
+document.getElementById('clock-out').addEventListener('click', () => {
+  const att = getAttendance();
+  const userId = session.id;
+  const now = new Date();
+  const iso = now.toISOString();
+  const dayKey = iso.slice(0,10);
+  let rec = att.find(a => a.userId === userId && a.date === dayKey);
+  if(!rec || !rec.clockIn) return alert('You must clock in first.');
+  if(rec.clockOut) return alert('You already clocked out today at ' + new Date(rec.clockOut).toLocaleTimeString());
+  rec.clockOut = iso;
+  // compute overtime if after 18:00
+  const endHour = 18;
+  const clockOutDate = new Date(rec.clockOut);
+  const overtime = Math.max(0, (clockOutDate.getHours() + clockOutDate.getMinutes()/60) - endHour);
+  rec.overtimeHours = Math.round(overtime * 100) / 100;
+  localStorage.setItem('mp_attendance', JSON.stringify(att));
+  alert('Clocked out at ' + now.toLocaleTimeString() + (rec.overtimeHours>0 ? '\\nOvertime: ' + rec.overtimeHours + ' hrs' : ''));
+});
+
+// populate announcements if any
+function loadAnnouncements(){
+  const ann = JSON.parse(localStorage.getItem('mp_announcements')||'[]');
+  const container = document.getElementById('announcements');
+  container.innerHTML = '';
+  if(!ann.length) container.innerHTML = '<div class="announce">No announcements yet. Admin can add announcements in Admin panel.</div>';
+  else ann.forEach(a => {
+    const el = document.createElement('div'); el.className='announce'; el.style.marginBottom='8px';
+    el.innerHTML = '<strong>' + a.title + '</strong><div class="muted" style="margin-top:6px">' + a.body + '<div style="font-size:12px;margin-top:4px;color:#999">' + new Date(a.created).toLocaleString() + '</div></div>';
+    container.appendChild(el);
+  });
+}
+loadAnnouncements();
+</script>
+</body>
+</html>
